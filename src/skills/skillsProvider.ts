@@ -1,5 +1,5 @@
 // ── Skills TreeView Provider ──
-// Displays installed/available skills in the sidebar.
+// Displays installed/available skills in the sidebar with click-to-open.
 
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -19,7 +19,7 @@ export class SkillsTreeProvider implements vscode.TreeDataProvider<SkillTreeItem
     }
 
     getChildren(element?: SkillTreeItem): SkillTreeItem[] {
-        if (element) return []; // flat list
+        if (element) return [];
 
         const ws = vscode.workspace.workspaceFolders?.[0];
         if (!ws) return [new SkillTreeItem('No workspace open', '', false, 'info')];
@@ -35,6 +35,12 @@ export class SkillsTreeProvider implements vscode.TreeDataProvider<SkillTreeItem
         }
 
         const items: SkillTreeItem[] = [];
+
+        // Action buttons at top
+        items.push(new SkillTreeItem('▶ Install Skills Preset', 'click to run', false, 'action', 'ohMyAg.installSkills'));
+        items.push(new SkillTreeItem('↻ Update All Skills', 'click to update', false, 'action', 'ohMyAg.updateSkills'));
+        items.push(new SkillTreeItem('🩺 Run Doctor', 'check environment', false, 'action', 'ohMyAg.doctor'));
+        items.push(new SkillTreeItem('', '', false, 'separator'));
 
         // Group by category
         const categories: Record<string, SkillInfo[]> = { domain: [], coordination: [], utility: [], infrastructure: [] };
@@ -52,17 +58,20 @@ export class SkillsTreeProvider implements vscode.TreeDataProvider<SkillTreeItem
         for (const [cat, skills] of Object.entries(categories)) {
             if (skills.length === 0) continue;
             const header = new SkillTreeItem(categoryLabels[cat] ?? cat, '', false, 'header');
-            header.collapsibleState = vscode.TreeItemCollapsibleState.None;
             items.push(header);
 
             for (const skill of skills) {
                 const isInstalled = installed.has(skill.name);
-                items.push(new SkillTreeItem(skill.name, skill.desc, isInstalled, 'skill'));
+                // If installed, clicking opens the SKILL.md file
+                const skillMdPath = isInstalled
+                    ? path.join(skillsDir, skill.name, 'SKILL.md')
+                    : undefined;
+                items.push(new SkillTreeItem(skill.name, skill.desc, isInstalled, 'skill', undefined, skillMdPath));
             }
         }
 
-        if (items.length === 0) {
-            return [new SkillTreeItem('No skills found. Run "Install Skills".', '', false, 'info')];
+        if (items.length <= 4) { // only action items
+            items.push(new SkillTreeItem('No skills found. Click "Install Skills" above.', '', false, 'info'));
         }
 
         return items;
@@ -74,14 +83,33 @@ class SkillTreeItem extends vscode.TreeItem {
         public readonly skillName: string,
         public readonly desc: string,
         public readonly installed: boolean,
-        public readonly kind: 'skill' | 'header' | 'info',
+        public readonly kind: 'skill' | 'header' | 'info' | 'action' | 'separator',
+        commandId?: string,
+        filePath?: string,
     ) {
         super(skillName, vscode.TreeItemCollapsibleState.None);
 
         if (kind === 'skill') {
             this.description = desc;
             this.iconPath = new vscode.ThemeIcon(installed ? 'check' : 'circle-outline');
-            this.tooltip = `${skillName}: ${desc}\n${installed ? '✅ Installed' : '❌ Not installed'}`;
+            this.tooltip = `${skillName}: ${desc}\n${installed ? '✅ Installed — Click to open SKILL.md' : '❌ Not installed'}`;
+            // Click to open SKILL.md
+            if (filePath && fs.existsSync(filePath)) {
+                this.command = {
+                    command: 'vscode.open',
+                    title: 'Open SKILL.md',
+                    arguments: [vscode.Uri.file(filePath)],
+                };
+            }
+        } else if (kind === 'action') {
+            this.description = desc;
+            this.iconPath = new vscode.ThemeIcon('play');
+            if (commandId) {
+                this.command = { command: commandId, title: skillName };
+            }
+        } else if (kind === 'separator') {
+            this.description = '──────────────────';
+            this.iconPath = undefined;
         } else if (kind === 'header') {
             this.iconPath = undefined;
         } else {

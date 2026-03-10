@@ -1,5 +1,5 @@
 // ── Agents TreeView Provider ──
-// Displays running/completed agents from Serena memory files.
+// Displays running/completed agents with click-to-open progress files.
 
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -12,7 +12,6 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<AgentTreeItem
     private watcher: vscode.FileSystemWatcher | undefined;
 
     constructor() {
-        // Auto-refresh when .serena/memories changes
         const ws = vscode.workspace.workspaceFolders?.[0];
         if (ws) {
             this.watcher = vscode.workspace.createFileSystemWatcher(
@@ -24,37 +23,59 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<AgentTreeItem
         }
     }
 
-    refresh(): void {
-        this._onDidChangeTreeData.fire(undefined);
-    }
-
-    dispose(): void {
-        this.watcher?.dispose();
-    }
-
-    getTreeItem(element: AgentTreeItem): vscode.TreeItem {
-        return element;
-    }
+    refresh(): void { this._onDidChangeTreeData.fire(undefined); }
+    dispose(): void { this.watcher?.dispose(); }
+    getTreeItem(element: AgentTreeItem): vscode.TreeItem { return element; }
 
     getChildren(): AgentTreeItem[] {
         const ws = vscode.workspace.workspaceFolders?.[0];
         if (!ws) return [new AgentTreeItem('No workspace open', '', 'info')];
 
         const memoriesDir = path.join(ws.uri.fsPath, '.serena', 'memories');
+
+        // Action buttons at top
+        const items: AgentTreeItem[] = [];
+        items.push(new AgentTreeItem('▶ Spawn Agent', 'select type & start', 'action', 'ohMyAg.spawnAgent'));
+        items.push(new AgentTreeItem('📈 Show Usage', 'view model quota', 'action', 'ohMyAg.usage'));
+        items.push(new AgentTreeItem('🎛️ Dashboard', 'real-time monitor', 'action', 'ohMyAg.dashboard'));
+        items.push(new AgentTreeItem('✅ Verify Agent', 'check output quality', 'action', 'ohMyAg.verifyAgent'));
+        items.push(new AgentTreeItem('', '──────────────────', 'separator'));
+
         if (!fs.existsSync(memoriesDir)) {
-            return [new AgentTreeItem('No Serena memory found', 'Run "Initialize Memory"', 'info')];
+            items.push(new AgentTreeItem('No Serena memory found', '', 'info', 'ohMyAg.memoryInit'));
+            items.push(new AgentTreeItem('▶ Initialize Memory', 'click to create', 'action', 'ohMyAg.memoryInit'));
+            return items;
         }
 
         const agents = this.discoverAgents(memoriesDir);
         if (agents.length === 0) {
-            return [new AgentTreeItem('No agents detected', '', 'info')];
+            items.push(new AgentTreeItem('No agents detected', 'spawn one above', 'info'));
+            return items;
         }
 
-        return agents.map(a => new AgentTreeItem(
-            a.agent,
-            `${a.status}${a.turn != null ? ` • Turn ${a.turn}` : ''}${a.task ? ` — ${a.task}` : ''}`,
-            a.status.toLowerCase() as any
-        ));
+        for (const a of agents) {
+            // Find the agent's progress file to open on click
+            const progressFile = this.findAgentFile(memoriesDir, a.agent);
+            items.push(new AgentTreeItem(
+                a.agent,
+                `${a.status}${a.turn != null ? ` • Turn ${a.turn}` : ''}${a.task ? ` — ${a.task}` : ''}`,
+                a.status.toLowerCase() as any,
+                undefined,
+                progressFile
+            ));
+        }
+
+        return items;
+    }
+
+    private findAgentFile(memoriesDir: string, agent: string): string | undefined {
+        try {
+            const candidates = fs.readdirSync(memoriesDir)
+                .filter(f => f.includes(agent) && f.endsWith('.md'))
+                .map(f => ({ name: f, mtime: fs.statSync(path.join(memoriesDir, f)).mtimeMs }))
+                .sort((a, b) => b.mtime - a.mtime);
+            return candidates[0] ? path.join(memoriesDir, candidates[0].name) : undefined;
+        } catch { return undefined; }
     }
 
     private discoverAgents(memoriesDir: string): AgentInfo[] {
@@ -62,7 +83,6 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<AgentTreeItem
         const seen = new Set<string>();
 
         try {
-            // Check task-board.md first
             const taskBoard = path.join(memoriesDir, 'task-board.md');
             if (fs.existsSync(taskBoard)) {
                 const content = fs.readFileSync(taskBoard, 'utf-8');
@@ -77,7 +97,6 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<AgentTreeItem
                 }
             }
 
-            // Discover from files
             const files = fs.readdirSync(memoriesDir).filter(f => f.endsWith('.md') && f !== '.gitkeep')
                 .map(f => ({ name: f, mtime: fs.statSync(path.join(memoriesDir, f)).mtimeMs }))
                 .sort((a, b) => b.mtime - a.mtime);
@@ -100,7 +119,6 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<AgentTreeItem
                 }
             }
 
-            // Progress files
             const progressFiles = fs.readdirSync(memoriesDir).filter(f => f.startsWith('progress-') && f.endsWith('.md'));
             for (const f of progressFiles) {
                 const agent = f.replace(/^progress-/, '').replace(/\.md$/, '');
@@ -128,13 +146,39 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<AgentTreeItem
 }
 
 class AgentTreeItem extends vscode.TreeItem {
-    constructor(label: string, description: string, kind: 'running' | 'completed' | 'failed' | 'unknown' | 'info' | 'pending') {
+    constructor(
+        label: string,
+        description: string,
+        kind: 'running' | 'completed' | 'failed' | 'unknown' | 'info' | 'pending' | 'action' | 'separator',
+        commandId?: string,
+        filePath?: string,
+    ) {
         super(label, vscode.TreeItemCollapsibleState.None);
         this.description = description;
-        const icons: Record<string, string> = {
-            running: 'sync~spin', completed: 'pass', failed: 'error',
-            unknown: 'question', info: 'info', pending: 'clock',
-        };
-        this.iconPath = new vscode.ThemeIcon(icons[kind] || 'circle-outline');
+
+        if (kind === 'action') {
+            this.iconPath = new vscode.ThemeIcon('play');
+            if (commandId) this.command = { command: commandId, title: label };
+        } else if (kind === 'separator') {
+            this.iconPath = undefined;
+        } else if (kind === 'info') {
+            this.iconPath = new vscode.ThemeIcon('info');
+            if (commandId) this.command = { command: commandId, title: label };
+        } else {
+            const icons: Record<string, string> = {
+                running: 'sync~spin', completed: 'pass', failed: 'error',
+                unknown: 'question', pending: 'clock',
+            };
+            this.iconPath = new vscode.ThemeIcon(icons[kind] || 'circle-outline');
+            // Click to open the agent's progress/result file
+            if (filePath && fs.existsSync(filePath)) {
+                this.command = {
+                    command: 'vscode.open',
+                    title: 'Open Agent File',
+                    arguments: [vscode.Uri.file(filePath)],
+                };
+                this.tooltip = `Click to open ${path.basename(filePath)}`;
+            }
+        }
     }
 }
