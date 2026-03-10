@@ -23,7 +23,25 @@ function loadMetrics(): Metrics {
     if (p && fs.existsSync(p)) {
         try { return JSON.parse(fs.readFileSync(p, 'utf-8')); } catch { /* fall through */ }
     }
-    return createEmptyMetrics();
+    // Auto-detect from .serena/memories
+    const ws = vscode.workspace.workspaceFolders?.[0];
+    const cwd = ws?.uri.fsPath ?? '';
+    const memoriesDir = path.join(cwd, '.serena', 'memories');
+    let sessions = 0;
+    let tasksCompleted = 0;
+    if (fs.existsSync(memoriesDir)) {
+        try {
+            const files = fs.readdirSync(memoriesDir);
+            sessions = files.filter(f => /^session-.*\.md$/.test(f)).length;
+            // Count completed tasks from task-board.md
+            const tbPath = path.join(memoriesDir, 'task-board.md');
+            if (fs.existsSync(tbPath)) {
+                const tb = fs.readFileSync(tbPath, 'utf-8');
+                tasksCompleted = (tb.match(/✅|completed/gi) || []).length;
+            }
+        } catch { }
+    }
+    return { ...createEmptyMetrics(), sessions, tasksCompleted };
 }
 
 function getGitStats(cwd: string): { filesChanged: number; linesAdded: number; linesRemoved: number; recentCommits: number } {
@@ -43,8 +61,8 @@ function detectSkillsFromMemories(cwd: string): Record<string, number> {
     if (!fs.existsSync(dir)) return skills;
     try {
         for (const f of fs.readdirSync(dir)) {
-            const m = f.match(/(?:progress|result)-(\w+)/);
-            if (m?.[1]) skills[m[1]] = (skills[m[1]] || 0) + 1;
+            const m = f.match(/(?:progress|result|session)-([\w-]+)/);
+            if (m?.[1] && m[1] !== 'metrics') skills[m[1]] = (skills[m[1]] || 0) + 1;
         }
     } catch { }
     return skills;

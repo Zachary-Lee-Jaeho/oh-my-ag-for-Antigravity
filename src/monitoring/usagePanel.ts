@@ -87,18 +87,31 @@ function getHtml(snapshot: QuotaSnapshot | null): string {
     </body></html>`;
 }
 
+let refreshInterval: NodeJS.Timeout | undefined;
+
 export async function showUsagePanel(allowInsecure: boolean): Promise<void> {
     if (panel) {
         panel.reveal();
     } else {
         panel = vscode.window.createWebviewPanel('ohMyAg.usage', '📈 Usage', vscode.ViewColumn.One, { enableScripts: true });
-        panel.onDidDispose(() => { panel = undefined; });
+        panel.onDidDispose(() => {
+            panel = undefined;
+            if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = undefined; }
+        });
         panel.webview.onDidReceiveMessage(async msg => {
             if (msg.type === 'refresh') {
                 const snap = await fetchQuota(allowInsecure);
                 panel!.webview.html = getHtml(snap);
             }
         });
+
+        // Auto-refresh every 30 seconds
+        refreshInterval = setInterval(async () => {
+            if (panel) {
+                const snap = await fetchQuota(allowInsecure);
+                panel.webview.html = getHtml(snap);
+            }
+        }, 30_000);
     }
     const snap = await fetchQuota(allowInsecure);
     panel.webview.html = getHtml(snap);

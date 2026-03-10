@@ -42,6 +42,7 @@ function parseSessionInfo(memoriesDir: string): SessionInfo {
         if (/IN PROGRESS|RUNNING/i.test(content)) status = 'RUNNING';
         else if (/COMPLETED|DONE/i.test(content)) status = 'COMPLETED';
         else if (/FAILED|ERROR/i.test(content)) status = 'FAILED';
+        else if (/PENDING|WAITING/i.test(content)) status = 'PENDING';
         return { id: id.trim(), status };
     } catch { return { id: 'N/A', status: 'UNKNOWN' }; }
 }
@@ -53,8 +54,17 @@ function parseTaskBoard(memoriesDir: string): AgentInfo[] {
     for (const line of content.split('\n')) {
         if (!line.startsWith('|') || /^\|\s*-+/.test(line)) continue;
         const cols = line.split('|').map(c => c.trim()).filter(Boolean);
-        if (cols.length < 2 || !cols[0] || /^agent$/i.test(cols[0])) continue;
-        agents.push({ agent: cols[0], status: cols[1] || 'pending', task: cols[2] || '', turn: null });
+        if (cols.length < 2 || !cols[0]) continue;
+        // Skip header rows
+        if (/^(ID|#|agent|task|status|priority)$/i.test(cols[0])) continue;
+        // Handle format: | ID | Task | Agent | Status | Priority |
+        if (cols.length >= 4) {
+            const statusCol = cols[3] || 'pending';
+            const status = statusCol.replace(/[✅⏳🔄❌]/g, '').trim().toLowerCase() || 'pending';
+            agents.push({ agent: cols[2] || cols[0], status, task: cols[1] || '', turn: null });
+        } else {
+            agents.push({ agent: cols[0], status: cols[1] || 'pending', task: cols[2] || '', turn: null });
+        }
     }
     return agents;
 }
@@ -124,13 +134,32 @@ function getLatestActivity(memoriesDir: string): { agent: string; message: strin
     } catch { return []; }
 }
 
+function parsePhaseProgress(memoriesDir: string): { phase: string; done: boolean }[] {
+    try {
+        const files = fs.readdirSync(memoriesDir).filter(f => /^session-.*\.md$/.test(f));
+        for (const f of files) {
+            const content = readFileSafe(path.join(memoriesDir, f));
+            const phases: { phase: string; done: boolean }[] = [];
+            for (const line of content.split('\n')) {
+                const m = line.match(/^- \[([ x\/])\] (.+)/i);
+                if (m && m[1] !== undefined && m[2]) {
+                    phases.push({ phase: m[2].trim(), done: m[1] === 'x' });
+                }
+            }
+            if (phases.length > 0) return phases;
+        }
+    } catch { }
+    return [];
+}
+
 function buildFullState(): DashboardState | null {
     const memoriesDir = getMemoriesDir();
     if (!memoriesDir) return null;
     const session = parseSessionInfo(memoriesDir);
     let agents = parseTaskBoard(memoriesDir).map(a => ({ ...a, turn: getAgentTurn(memoriesDir, a.agent) }));
     if (agents.length === 0) agents = discoverAgents(memoriesDir);
-    return { session, agents, activity: getLatestActivity(memoriesDir), memoriesDir, updatedAt: new Date().toISOString() };
+    const phases = parsePhaseProgress(memoriesDir);
+    return { session, agents, activity: getLatestActivity(memoriesDir), memoriesDir, updatedAt: new Date().toISOString(), phases };
 }
 
 function getDashboardHtml(state: DashboardState | null): string {
@@ -152,8 +181,18 @@ function getDashboardHtml(state: DashboardState | null): string {
         ? state.activity.map(a => `<li><span style="color:#c39bd3;font-weight:600">[${a.agent}]</span> <span style="color:#8a7da0">${a.message}</span></li>`).join('')
         : '<li style="color:#8a7da0;font-style:italic">No activity yet</li>';
 
-    const statusColor: Record<string, string> = { RUNNING: '#2ecc71', COMPLETED: '#1abc9c', FAILED: '#e74c3c' };
+    const statusColor: Record<string, string> = { RUNNING: '#2ecc71', COMPLETED: '#1abc9c', FAILED: '#e74c3c', PENDING: '#f1c40f' };
     const sColor = statusColor[state.session.status] || '#8a7da0';
+
+    const phases = state.phases ?? [];
+    const phaseHtml = phases.length > 0
+        ? `<div class="card" style="grid-column:1/-1"><div class="card-header">Phase Progress</div><div class="card-body">${phases.map(p =>
+            `<div style="padding:4px 0;display:flex;align-items:center;gap:8px">
+                    <span style="color:${p.done ? '#2ecc71' : '#8a7da0'}">${p.done ? '✅' : '⬜'}</span>
+                    <span style="${p.done ? 'text-decoration:line-through;color:#8a7da0' : ''}">${p.phase}</span>
+                </div>`
+        ).join('')
+        }</div></div>` : '';
 
     return `<!DOCTYPE html><html><head><style>
         :root{--bg:var(--vscode-editor-background,#0f0b1a);--surface:#1a1428;--surface2:#241e33;--border:#3d2e5c;--text:var(--vscode-foreground,#e8e0f0);--dim:#8a7da0;--purple:#c39bd3}
@@ -182,6 +221,7 @@ function getDashboardHtml(state: DashboardState | null): string {
         <div class="card"><div class="card-header">Agent Status</div><div class="card-body"><table><thead><tr><th>Agent</th><th>Status</th><th>Turn</th><th>Task</th></tr></thead><tbody>${agentRows}</tbody></table></div></div>
         <div class="card"><div class="card-header">Latest Activity</div><div class="card-body"><ul>${activityItems}</ul></div></div>
     </div>
+    ${phaseHtml}
     <div class="footer">oh-my-ag Dashboard</div>
     <script>const vscode=acquireVsCodeApi();window.addEventListener('message',e=>{if(e.data.type==='update')document.location.reload()});</script>
     </body></html>`;

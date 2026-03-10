@@ -72,6 +72,7 @@ export interface DashboardState {
     activity: { agent: string; message: string; file: string }[];
     memoriesDir: string;
     updatedAt: string;
+    phases?: { phase: string; done: boolean }[];
 }
 
 export interface Metrics {
