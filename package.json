@@ -1,0 +1,62 @@
+{
+  "name": "oh-my-ag",
+  "displayName": "oh-my-ag for Antigravity",
+  "description": "Multi-Agent Orchestrator — Skills, Workflows, Usage Monitoring, Agent Management for Antigravity IDE",
+  "version": "1.0.1",
+  "publisher": "zachary-lee-jaeho",
+  "engines": { "vscode": "^1.68.0" },
+  "categories": ["Other"],
+  "activationEvents": ["*"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ohMyAg",
+          "title": "oh-my-ag",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "ohMyAg": [
+        { "id": "ohMyAg.skills", "name": "Skills" },
+        { "id": "ohMyAg.agents", "name": "Agents" },
+        { "id": "ohMyAg.quickStats", "name": "Quick Stats" }
+      ]
+    },
+    "commands": [
+      { "command": "ohMyAg.installSkills", "title": "oh-my-ag: Install Skills" },
+      { "command": "ohMyAg.updateSkills", "title": "oh-my-ag: Update Skills" },
+      { "command": "ohMyAg.doctor", "title": "oh-my-ag: Doctor (Environment Check)" },
+      { "command": "ohMyAg.usage", "title": "oh-my-ag: Show Usage Quota" },
+      { "command": "ohMyAg.dashboard", "title": "oh-my-ag: Open Dashboard" },
+      { "command": "ohMyAg.stats", "title": "oh-my-ag: Show Stats" },
+      { "command": "ohMyAg.retro", "title": "oh-my-ag: Session Retrospective" },
+      { "command": "ohMyAg.spawnAgent", "title": "oh-my-ag: Spawn Agent" },
+      { "command": "ohMyAg.verifyAgent", "title": "oh-my-ag: Verify Agent Output" },
+      { "command": "ohMyAg.memoryInit", "title": "oh-my-ag: Initialize Serena Memory" },
+      { "command": "ohMyAg.cleanup", "title": "oh-my-ag: Cleanup Orphan Processes" },
+      { "command": "ohMyAg.refreshSkills", "title": "Refresh", "icon": "$(refresh)" },
+      { "command": "ohMyAg.refreshAgents", "title": "Refresh", "icon": "$(refresh)" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "ohMyAg.refreshSkills", "when": "view == ohMyAg.skills", "group": "navigation" },
+        { "command": "ohMyAg.refreshAgents", "when": "view == ohMyAg.agents", "group": "navigation" }
+      ]
+    },
+    "keybindings": [
+      { "command": "ohMyAg.skills.focus", "key": "ctrl+shift+a", "mac": "cmd+shift+a" }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.68.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}
