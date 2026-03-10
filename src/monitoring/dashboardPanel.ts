@@ -227,6 +227,8 @@ function getDashboardHtml(state: DashboardState | null): string {
     </body></html>`;
 }
 
+let pollTimer: NodeJS.Timeout | undefined;
+
 export function showDashboardPanel(): void {
     if (panel) { panel.reveal(); return; }
 
@@ -237,7 +239,7 @@ export function showDashboardPanel(): void {
         if (msg.type === 'refresh') panel!.webview.html = getDashboardHtml(buildFullState());
     });
 
-    // Watch for .serena/memories changes
+    // Watch for .serena/memories changes (instant)
     const ws = vscode.workspace.workspaceFolders?.[0];
     if (ws) {
         const pattern = new vscode.RelativePattern(ws, '.serena/memories/**/*.md');
@@ -250,9 +252,15 @@ export function showDashboardPanel(): void {
         watcher.onDidDelete(update);
     }
 
+    // Also poll every 10s as fallback (covers slow writes, external processes)
+    pollTimer = setInterval(() => {
+        if (panel) panel.webview.html = getDashboardHtml(buildFullState());
+    }, 10_000);
+
     panel.onDidDispose(() => {
         panel = undefined;
         watcher?.dispose();
         watcher = undefined;
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = undefined; }
     });
 }

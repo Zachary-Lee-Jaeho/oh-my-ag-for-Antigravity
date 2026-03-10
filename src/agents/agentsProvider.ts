@@ -89,10 +89,22 @@ export class AgentsTreeProvider implements vscode.TreeDataProvider<AgentTreeItem
                 for (const line of content.split('\n')) {
                     if (!line.startsWith('|') || /^\|\s*-+/.test(line)) continue;
                     const cols = line.split('|').map(c => c.trim()).filter(Boolean);
-                    if (cols.length < 2 || !cols[0] || /^agent$/i.test(cols[0])) continue;
-                    if (!seen.has(cols[0].toLowerCase())) {
-                        seen.add(cols[0].toLowerCase());
-                        agents.push({ agent: cols[0], status: cols[1] || 'pending', task: cols[2] || '', turn: this.getAgentTurn(memoriesDir, cols[0]) });
+                    if (cols.length < 2 || !cols[0]) continue;
+                    if (/^(ID|#|agent|task|status|priority)$/i.test(cols[0])) continue;
+                    // Handle format: | ID | Task | Agent | Status | Priority |
+                    let agentName: string, status: string, task: string;
+                    if (cols.length >= 4) {
+                        agentName = cols[2] || cols[0];
+                        status = (cols[3] || 'pending').replace(/[✅⏳🔄❌]/g, '').trim().toLowerCase() || 'pending';
+                        task = cols[1] || '';
+                    } else {
+                        agentName = cols[0];
+                        status = cols[1] || 'pending';
+                        task = cols[2] || '';
+                    }
+                    if (!seen.has(agentName.toLowerCase())) {
+                        seen.add(agentName.toLowerCase());
+                        agents.push({ agent: agentName, status, task, turn: this.getAgentTurn(memoriesDir, agentName) });
                     }
                 }
             }

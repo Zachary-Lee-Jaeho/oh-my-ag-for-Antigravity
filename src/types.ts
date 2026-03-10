@@ -95,9 +95,9 @@ export interface Retrospective {
     id: string;
     date: string;
     summary: string;
-    learnings: string[];
+    keyLearnings: string[];
+    filesChanged: string[];
     nextSteps: string[];
-    gitCommits: number;
 }
 
 export const SKILLS_REGISTRY: SkillInfo[] = [
