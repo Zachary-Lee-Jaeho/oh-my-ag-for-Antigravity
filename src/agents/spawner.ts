@@ -20,13 +20,22 @@ const VENDORS: Record<string, VendorConfig> = {
 };
 
 const AGENT_TYPES = [
+    // Domain
     { label: '🏗️ Frontend Agent', value: 'frontend', desc: 'React/Next.js UI development' },
     { label: '⚙️ Backend Agent', value: 'backend', desc: 'FastAPI/PostgreSQL API development' },
     { label: '📱 Mobile Agent', value: 'mobile', desc: 'Flutter cross-platform development' },
+    // Coordination
+    { label: '💡 Brainstorm', value: 'brainstorm', desc: 'Design-first ideation' },
     { label: '🎯 PM Agent', value: 'pm', desc: 'Requirements analysis and task decomposition' },
     { label: '🔍 QA Agent', value: 'qa', desc: 'Security, performance, accessibility testing' },
+    { label: '📋 Workflow Guide', value: 'workflow-guide', desc: 'Manual multi-agent orchestration' },
+    { label: '🚀 Orchestrator', value: 'orchestrator', desc: 'Automated parallel CLI execution' },
+    // Utility
     { label: '🐛 Debug Agent', value: 'debug', desc: 'Bug diagnosis and root cause analysis' },
-    { label: '💡 Brainstorm', value: 'brainstorm', desc: 'Design-first ideation' },
+    { label: '📝 Commit', value: 'commit', desc: 'Conventional Commits helper' },
+    // Infrastructure
+    { label: '☁️ TF Infra Agent', value: 'tf-infra-agent', desc: 'Multi-cloud Terraform (AWS/GCP/Azure/OCI)' },
+    { label: '🔧 Developer Workflow', value: 'developer-workflow', desc: 'Monorepo, mise tasks, CI/CD, releases' },
 ];
 
 /** Detect available CLI vendor (check which is installed) */
