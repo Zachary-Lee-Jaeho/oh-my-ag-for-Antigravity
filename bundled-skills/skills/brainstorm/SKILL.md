@@ -1,6 +1,5 @@
 ---
 name: brainstorm
-description: Design-first ideation that explores user intent, constraints, and approaches before any planning or implementation
 ---
 
 # Brainstorm - Design-First Ideation
