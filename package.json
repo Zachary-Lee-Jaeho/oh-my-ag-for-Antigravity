@@ -2,7 +2,7 @@
   "name": "oh-my-ag",
   "displayName": "oh-my-ag for Antigravity",
   "description": "Multi-Agent Orchestrator — Skills, Workflows, Usage Monitoring, Agent Management for Antigravity IDE",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "zachary-lee-jaeho",
   "engines": {
     "vscode": "^1.68.0"

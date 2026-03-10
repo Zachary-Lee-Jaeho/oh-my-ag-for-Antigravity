@@ -1,7 +1,8 @@
 // ── oh-my-ag for Antigravity — Extension Entry Point ──
-// Registers all commands, TreeViews, Status Bar items, and auto-installs skills.
+// Registers all commands, TreeViews, Status Bar items, and auto-installs skills + CLI.
 
 import * as vscode from 'vscode';
+import { execSync } from 'child_process';
 import { SkillsTreeProvider } from './skills/skillsProvider';
 import { autoInstallIfNeeded, installSkillsCommand, updateSkillsCommand } from './skills/installer';
 import { AgentsTreeProvider } from './agents/agentsProvider';
@@ -21,9 +22,49 @@ import { fetchQuota } from './lsBridge';
 let statusBarItem: vscode.StatusBarItem;
 let refreshTimer: NodeJS.Timeout | undefined;
 
+/** Check if oh-my-ag CLI is globally installed, auto-install if not */
+async function ensureOhMyAgCli(): Promise<void> {
+    try {
+        execSync('oh-my-ag --version', { stdio: 'pipe', encoding: 'utf-8' });
+        return; // already installed
+    } catch { /* not installed */ }
+
+    // Also check via npx dry-run
+    try {
+        execSync('which oh-my-ag', { stdio: 'pipe' });
+        return;
+    } catch { /* not found */ }
+
+    const choice = await vscode.window.showInformationMessage(
+        'oh-my-ag CLI is not installed globally. Install it for multi-agent spawn support?',
+        'Install (npm)', 'Install (bun)', 'Skip'
+    );
+
+    if (!choice || choice === 'Skip') return;
+
+    const cmd = choice === 'Install (bun)'
+        ? 'bun install --global oh-my-ag'
+        : 'npm install -g oh-my-ag';
+
+    await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: `Installing oh-my-ag globally...`, cancellable: false },
+        async () => {
+            try {
+                execSync(cmd, { stdio: 'pipe', timeout: 60_000 });
+                vscode.window.showInformationMessage('✅ oh-my-ag CLI installed globally! Multi-agent spawn is now available.');
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to install oh-my-ag: ${err instanceof Error ? err.message : err}`);
+            }
+        }
+    );
+}
+
 export function activate(context: vscode.ExtensionContext) {
     // ── Auto-install skills if workspace has none ──
     autoInstallIfNeeded(context);
+
+    // ── Auto-install oh-my-ag CLI globally if missing ──
+    ensureOhMyAgCli();
 
     // ── TreeView Providers ──
     const skillsProvider = new SkillsTreeProvider();
